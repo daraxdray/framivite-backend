@@ -14,6 +14,7 @@ export class CloudinaryService {
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const cloudUrl = process.env.CLOUDINARY_URL;
 
     if (cloudName && apiKey && apiSecret) {
       cloudinary.config({
@@ -24,13 +25,28 @@ export class CloudinaryService {
       });
       this.isConfigured = true;
       this.logger.log(`Cloudinary initialized with cloud_name: ${cloudName}`);
-    } else if (process.env.CLOUDINARY_URL) {
-      cloudinary.config({ secure: true });
-      this.isConfigured = true;
-      this.logger.log('Cloudinary initialized with CLOUDINARY_URL');
+    } else if (cloudUrl) {
+      try {
+        const matches = cloudUrl.match(/^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/);
+        if (matches) {
+          cloudinary.config({
+            api_key: matches[1],
+            api_secret: matches[2],
+            cloud_name: matches[3],
+            secure: true,
+          });
+          this.isConfigured = true;
+          this.logger.log(`Cloudinary initialized from CLOUDINARY_URL (cloud_name: ${matches[3]})`);
+        } else {
+          cloudinary.config({ secure: true });
+          this.isConfigured = true;
+        }
+      } catch (e: any) {
+        this.logger.error('Failed to parse CLOUDINARY_URL:', e);
+      }
     } else {
       this.logger.warn(
-        'Cloudinary environment variables missing (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET). Falling back to local disk storage.',
+        'Cloudinary environment variables missing. Falling back to local disk storage.',
       );
     }
   }
@@ -49,35 +65,40 @@ export class CloudinaryService {
       return this.fallbackToLocalDisk(buffer, folder, customFilename);
     }
 
-    return new Promise((resolve, reject) => {
-      const uniqueId = `${uuidv4().substring(0, 8)}`;
-      const prefix = folder.split('/').pop() || 'media';
-      const publicId = `${prefix}-${uniqueId}`;
+    try {
+      return await new Promise<string>((resolve, reject) => {
+        const uniqueId = `${uuidv4().substring(0, 8)}`;
+        const prefix = folder.split('/').pop() || 'media';
+        const publicId = `${prefix}-${uniqueId}`;
 
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder,
-          public_id: publicId,
-          resource_type: 'auto',
-        },
-        (error, result) => {
-          if (error) {
-            this.logger.error(`Cloudinary upload failed: ${error.message}`);
-            return reject(error);
-          }
-          if (!result?.secure_url) {
-            return reject(new Error('Cloudinary upload returned empty URL'));
-          }
-          this.logger.log(`Uploaded to Cloudinary: ${result.secure_url}`);
-          resolve(result.secure_url);
-        },
-      );
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder,
+            public_id: publicId,
+            resource_type: 'auto',
+          },
+          (error, result) => {
+            if (error) {
+              this.logger.error(`Cloudinary stream error: ${error.message}`);
+              return reject(error);
+            }
+            if (!result?.secure_url) {
+              return reject(new Error('Cloudinary returned empty secure_url'));
+            }
+            this.logger.log(`Uploaded to Cloudinary successfully: ${result.secure_url}`);
+            resolve(result.secure_url);
+          },
+        );
 
-      const stream = new Readable();
-      stream.push(buffer);
-      stream.push(null);
-      stream.pipe(uploadStream);
-    });
+        const stream = new Readable();
+        stream.push(buffer);
+        stream.push(null);
+        stream.pipe(uploadStream);
+      });
+    } catch (err: any) {
+      this.logger.error(`Cloudinary upload failed (${err.message}). Falling back to local disk storage.`);
+      return this.fallbackToLocalDisk(buffer, folder, customFilename);
+    }
   }
 
   private async fallbackToLocalDisk(
