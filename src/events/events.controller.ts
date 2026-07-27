@@ -17,11 +17,21 @@ import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+import { CloudinaryService } from '../common/cloudinary.service';
+
 const storage = memoryStorage();
 
 @Controller('api/events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
+
+  @Get('cloudinary-status')
+  async getCloudinaryStatus() {
+    return this.cloudinaryService.getStatus();
+  }
 
   @UseGuards(JwtAuthGuard)
   @Post()

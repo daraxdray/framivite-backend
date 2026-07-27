@@ -11,10 +11,10 @@ export class CloudinaryService {
   private isConfigured = false;
 
   constructor() {
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-    const cloudUrl = process.env.CLOUDINARY_URL;
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+    const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
+    const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
+    const cloudUrl = process.env.CLOUDINARY_URL?.trim().replace(/^['"]|['"]$/g, '');
 
     if (cloudName && apiKey && apiSecret) {
       cloudinary.config({
@@ -27,28 +27,44 @@ export class CloudinaryService {
       this.logger.log(`Cloudinary initialized with cloud_name: ${cloudName}`);
     } else if (cloudUrl) {
       try {
-        const matches = cloudUrl.match(/^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/);
-        if (matches) {
-          cloudinary.config({
-            api_key: matches[1],
-            api_secret: matches[2],
-            cloud_name: matches[3],
-            secure: true,
-          });
+        const cleanUrl = cloudUrl.replace(/\/+$/, '');
+        cloudinary.config({
+          cloudinary_url: cleanUrl,
+          secure: true,
+        });
+        const currentConfig = cloudinary.config();
+        if (currentConfig.cloud_name && currentConfig.api_key) {
           this.isConfigured = true;
-          this.logger.log(`Cloudinary initialized from CLOUDINARY_URL (cloud_name: ${matches[3]})`);
+          this.logger.log(`Cloudinary initialized from CLOUDINARY_URL (cloud_name: ${currentConfig.cloud_name})`);
         } else {
-          cloudinary.config({ secure: true });
-          this.isConfigured = true;
+          this.logger.error('CLOUDINARY_URL could not be parsed into valid cloud_name / api_key');
         }
       } catch (e: any) {
         this.logger.error('Failed to parse CLOUDINARY_URL:', e);
       }
-    } else {
+    }
+
+    if (!this.isConfigured) {
       this.logger.warn(
-        'Cloudinary environment variables missing. Falling back to local disk storage.',
+        'Cloudinary environment variables missing or invalid. Falling back to local disk storage.',
       );
     }
+  }
+
+  getStatus() {
+    const config = cloudinary.config();
+    return {
+      isConfigured: this.isConfigured,
+      hasCloudName: Boolean(config.cloud_name),
+      cloudName: config.cloud_name || null,
+      hasApiKey: Boolean(config.api_key),
+      envVarsPresent: {
+        CLOUDINARY_CLOUD_NAME: Boolean(process.env.CLOUDINARY_CLOUD_NAME),
+        CLOUDINARY_API_KEY: Boolean(process.env.CLOUDINARY_API_KEY),
+        CLOUDINARY_API_SECRET: Boolean(process.env.CLOUDINARY_API_SECRET),
+        CLOUDINARY_URL: Boolean(process.env.CLOUDINARY_URL),
+      },
+    };
   }
 
   async uploadBuffer(
