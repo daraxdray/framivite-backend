@@ -67,6 +67,62 @@ export class CloudinaryService {
     };
   }
 
+  async testUpload(buffer: Buffer, originalname?: string) {
+    const config = cloudinary.config();
+    if (!this.isConfigured || !config.cloud_name) {
+      return {
+        success: false,
+        isConfigured: this.isConfigured,
+        cloudName: config.cloud_name || null,
+        error: 'Cloudinary is NOT configured on the server. Environment variables (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, or CLOUDINARY_URL) are missing in Render Environment settings.',
+        status: this.getStatus(),
+      };
+    }
+
+    try {
+      const uniqueId = `test-${uuidv4().substring(0, 8)}`;
+      const result: any = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'framivite/test',
+            public_id: uniqueId,
+            resource_type: 'auto',
+          },
+          (error, res) => {
+            if (error) return reject(error);
+            resolve(res);
+          },
+        );
+
+        const stream = new Readable();
+        stream.push(buffer);
+        stream.push(null);
+        stream.pipe(uploadStream);
+      });
+
+      return {
+        success: true,
+        isConfigured: true,
+        cloudName: config.cloud_name,
+        uploadedUrl: result.secure_url,
+        publicId: result.public_id,
+        bytes: result.bytes,
+        format: result.format,
+        width: result.width,
+        height: result.height,
+        error: null,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        isConfigured: this.isConfigured,
+        cloudName: config.cloud_name || null,
+        error: err.message || 'Cloudinary upload failed',
+        status: this.getStatus(),
+      };
+    }
+  }
+
   async uploadBuffer(
     buffer: Buffer,
     folder: string,

@@ -8,10 +8,11 @@ import {
   Delete,
   UseInterceptors,
   UploadedFiles,
+  UploadedFile,
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -31,6 +32,19 @@ export class EventsController {
   @Get('cloudinary-status')
   async getCloudinaryStatus() {
     return this.cloudinaryService.getStatus();
+  }
+
+  @Post('test-cloudinary')
+  @UseInterceptors(FileInterceptor('file', { storage }))
+  async testCloudinary(@UploadedFile() file?: Express.Multer.File) {
+    if (!file || !file.buffer) {
+      return {
+        success: false,
+        error: 'No image file received in request field "file"',
+        status: this.cloudinaryService.getStatus(),
+      };
+    }
+    return this.cloudinaryService.testUpload(file.buffer, file.originalname);
   }
 
   @UseGuards(JwtAuthGuard)
