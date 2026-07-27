@@ -40,6 +40,11 @@ export class CloudinaryService {
     folder: string,
     customFilename?: string,
   ): Promise<string> {
+    if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+      this.logger.warn('Empty or invalid buffer passed to uploadBuffer. Returning fallback path.');
+      return '/uploads/frames/default-frame.png';
+    }
+
     if (!this.isConfigured) {
       return this.fallbackToLocalDisk(buffer, folder, customFilename);
     }

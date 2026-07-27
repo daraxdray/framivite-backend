@@ -34,6 +34,12 @@ export class EventsService {
     return slug;
   }
 
+  private parseDateSafely(dateVal: any): Date | null {
+    if (!dateVal || dateVal === 'null' || dateVal === 'undefined' || dateVal === '') return null;
+    const d = new Date(dateVal);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
   async create(
     createEventDto: CreateEventDto,
     bannerFile?: Express.Multer.File,
@@ -43,21 +49,29 @@ export class EventsService {
     const slug = await this.generateUniqueSlug(createEventDto.title);
 
     let bannerUrl = createEventDto.bannerUrl || null;
-    if (bannerFile) {
-      bannerUrl = await this.cloudinaryService.uploadBuffer(
-        bannerFile.buffer,
-        'framivite/banners',
-        bannerFile.originalname,
-      );
+    if (bannerFile && bannerFile.buffer && bannerFile.buffer.length > 0) {
+      try {
+        bannerUrl = await this.cloudinaryService.uploadBuffer(
+          bannerFile.buffer,
+          'framivite/banners',
+          bannerFile.originalname,
+        );
+      } catch (err) {
+        console.error('Failed to upload banner:', err);
+      }
     }
 
     let frameUrl = createEventDto.frameUrl || '/uploads/frames/default-frame.png';
-    if (frameFile) {
-      frameUrl = await this.cloudinaryService.uploadBuffer(
-        frameFile.buffer,
-        'framivite/frames',
-        frameFile.originalname,
-      );
+    if (frameFile && frameFile.buffer && frameFile.buffer.length > 0) {
+      try {
+        frameUrl = await this.cloudinaryService.uploadBuffer(
+          frameFile.buffer,
+          'framivite/frames',
+          frameFile.originalname,
+        );
+      } catch (err) {
+        console.error('Failed to upload frame:', err);
+      }
     }
 
     const defaultPosition = JSON.stringify({
@@ -74,7 +88,7 @@ export class EventsService {
       data: {
         title: createEventDto.title,
         description: createEventDto.description || '',
-        date: createEventDto.date ? new Date(createEventDto.date) : null,
+        date: this.parseDateSafely(createEventDto.date),
         location: createEventDto.location || '',
         bannerUrl,
         frameUrl,
@@ -135,28 +149,46 @@ export class EventsService {
     await this.findOne(id);
 
     const dataToUpdate: any = {};
-    if (updateData.title !== undefined) dataToUpdate.title = updateData.title;
-    if (updateData.description !== undefined) dataToUpdate.description = updateData.description;
-    if (updateData.date !== undefined) dataToUpdate.date = updateData.date ? new Date(updateData.date) : null;
-    if (updateData.location !== undefined) dataToUpdate.location = updateData.location;
-    if (updateData.framePosition !== undefined) dataToUpdate.framePosition = updateData.framePosition;
+    if (updateData.title !== undefined && updateData.title.trim() !== '') {
+      dataToUpdate.title = updateData.title;
+    }
+    if (updateData.description !== undefined) {
+      dataToUpdate.description = updateData.description || '';
+    }
+    if (updateData.date !== undefined) {
+      dataToUpdate.date = this.parseDateSafely(updateData.date);
+    }
+    if (updateData.location !== undefined) {
+      dataToUpdate.location = updateData.location || '';
+    }
+    if (updateData.framePosition !== undefined && updateData.framePosition.trim() !== '') {
+      dataToUpdate.framePosition = updateData.framePosition;
+    }
 
-    if (bannerFile) {
-      dataToUpdate.bannerUrl = await this.cloudinaryService.uploadBuffer(
-        bannerFile.buffer,
-        'framivite/banners',
-        bannerFile.originalname,
-      );
+    if (bannerFile && bannerFile.buffer && bannerFile.buffer.length > 0) {
+      try {
+        dataToUpdate.bannerUrl = await this.cloudinaryService.uploadBuffer(
+          bannerFile.buffer,
+          'framivite/banners',
+          bannerFile.originalname,
+        );
+      } catch (err) {
+        console.error('Failed to update banner:', err);
+      }
     } else if (updateData.bannerUrl !== undefined) {
       dataToUpdate.bannerUrl = updateData.bannerUrl;
     }
 
-    if (frameFile) {
-      dataToUpdate.frameUrl = await this.cloudinaryService.uploadBuffer(
-        frameFile.buffer,
-        'framivite/frames',
-        frameFile.originalname,
-      );
+    if (frameFile && frameFile.buffer && frameFile.buffer.length > 0) {
+      try {
+        dataToUpdate.frameUrl = await this.cloudinaryService.uploadBuffer(
+          frameFile.buffer,
+          'framivite/frames',
+          frameFile.originalname,
+        );
+      } catch (err) {
+        console.error('Failed to update frame:', err);
+      }
     } else if (updateData.frameUrl !== undefined) {
       dataToUpdate.frameUrl = updateData.frameUrl;
     }
