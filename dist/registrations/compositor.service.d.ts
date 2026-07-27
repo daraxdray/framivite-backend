@@ -6,6 +6,6 @@ export interface FramePosition {
     rotation?: number;
 }
 export declare class CompositorService {
-    compositePhoto(framePathOrUrl: string, userPhotoPath: string, framePosition: FramePosition, outputPath: string): Promise<string>;
+    compositePhoto(framePathOrUrl: string, userPhotoBufferOrPath: Buffer | string, framePosition: FramePosition): Promise<Buffer>;
     private createFallbackFrame;
 }

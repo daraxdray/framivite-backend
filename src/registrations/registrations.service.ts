@@ -4,15 +4,16 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CloudinaryService } from '../common/cloudinary.service';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { CompositorService, FramePosition } from './compositor.service';
-import { join } from 'path';
 
 @Injectable()
 export class RegistrationsService {
   constructor(
     private prisma: PrismaService,
     private compositorService: CompositorService,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
   async createRegistration(slug: string, createDto: CreateRegistrationDto) {
@@ -44,16 +45,21 @@ export class RegistrationsService {
   }
 
   async processPhotoUpload(id: string, photoFile: Express.Multer.File) {
-    if (!photoFile) {
+    if (!photoFile || (!photoFile.buffer && !photoFile.path)) {
       throw new BadRequestException('No photo file provided');
     }
 
     const registration = await this.findOne(id);
     const event = registration.event;
 
-    // 1. Photo URL
-    const photoUrl = `/uploads/selfies/${photoFile.filename}`;
-    const userPhotoPath = photoFile.path;
+    const userPhotoBuffer = photoFile.buffer;
+
+    // 1. Upload raw user selfie to Cloudinary (or local fallback)
+    const photoUrl = await this.cloudinaryService.uploadBuffer(
+      userPhotoBuffer,
+      'framivite/selfies',
+      `selfie-${id}.png`,
+    );
 
     // 2. Parse framePosition JSON
     let framePosition: FramePosition = {
@@ -66,25 +72,27 @@ export class RegistrationsService {
 
     if (event.framePosition) {
       try {
-        framePosition = typeof event.framePosition === 'string'
-          ? JSON.parse(event.framePosition)
-          : event.framePosition;
+        framePosition =
+          typeof event.framePosition === 'string'
+            ? JSON.parse(event.framePosition)
+            : event.framePosition;
       } catch (err) {
         console.warn('Failed to parse framePosition JSON:', err);
       }
     }
 
-    // 3. Output path for composed image
-    const composedFilename = `composed-${id}.png`;
-    const composedFullPath = join(process.cwd(), 'uploads', 'composed', composedFilename);
-    const composedImageUrl = `/uploads/composed/${composedFilename}`;
-
-    // 4. Trigger Compositing Pipeline
-    await this.compositorService.compositePhoto(
+    // 3. Trigger Compositing Pipeline (returns Buffer of composed PNG)
+    const composedBuffer = await this.compositorService.compositePhoto(
       event.frameUrl,
-      userPhotoPath,
+      userPhotoBuffer,
       framePosition,
-      composedFullPath,
+    );
+
+    // 4. Upload composed PNG to Cloudinary (or local fallback)
+    const composedImageUrl = await this.cloudinaryService.uploadBuffer(
+      composedBuffer,
+      'framivite/composed',
+      `composed-${id}.png`,
     );
 
     // 5. Update Registration record

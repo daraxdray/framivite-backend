@@ -1,10 +1,12 @@
 import { PrismaService } from '../prisma/prisma.service';
+import { CloudinaryService } from '../common/cloudinary.service';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { CompositorService } from './compositor.service';
 export declare class RegistrationsService {
     private prisma;
     private compositorService;
-    constructor(prisma: PrismaService, compositorService: CompositorService);
+    private cloudinaryService;
+    constructor(prisma: PrismaService, compositorService: CompositorService, cloudinaryService: CloudinaryService);
     createRegistration(slug: string, createDto: CreateRegistrationDto): Promise<{
         name: string;
         email: string;

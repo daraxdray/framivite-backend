@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CloudinaryService } from '../common/cloudinary.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class EventsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cloudinaryService: CloudinaryService,
+  ) {}
 
   private slugify(text: string): string {
     return text
@@ -38,13 +42,23 @@ export class EventsService {
   ) {
     const slug = await this.generateUniqueSlug(createEventDto.title);
 
-    const bannerUrl = bannerFile
-      ? `/uploads/banners/${bannerFile.filename}`
-      : createEventDto.bannerUrl || null;
+    let bannerUrl = createEventDto.bannerUrl || null;
+    if (bannerFile) {
+      bannerUrl = await this.cloudinaryService.uploadBuffer(
+        bannerFile.buffer,
+        'framivite/banners',
+        bannerFile.originalname,
+      );
+    }
 
-    const frameUrl = frameFile
-      ? `/uploads/frames/${frameFile.filename}`
-      : createEventDto.frameUrl || '/uploads/frames/default-frame.png';
+    let frameUrl = createEventDto.frameUrl || '/uploads/frames/default-frame.png';
+    if (frameFile) {
+      frameUrl = await this.cloudinaryService.uploadBuffer(
+        frameFile.buffer,
+        'framivite/frames',
+        frameFile.originalname,
+      );
+    }
 
     const defaultPosition = JSON.stringify({
       x: 100,
@@ -128,13 +142,21 @@ export class EventsService {
     if (updateData.framePosition !== undefined) dataToUpdate.framePosition = updateData.framePosition;
 
     if (bannerFile) {
-      dataToUpdate.bannerUrl = `/uploads/banners/${bannerFile.filename}`;
+      dataToUpdate.bannerUrl = await this.cloudinaryService.uploadBuffer(
+        bannerFile.buffer,
+        'framivite/banners',
+        bannerFile.originalname,
+      );
     } else if (updateData.bannerUrl !== undefined) {
       dataToUpdate.bannerUrl = updateData.bannerUrl;
     }
 
     if (frameFile) {
-      dataToUpdate.frameUrl = `/uploads/frames/${frameFile.filename}`;
+      dataToUpdate.frameUrl = await this.cloudinaryService.uploadBuffer(
+        frameFile.buffer,
+        'framivite/frames',
+        frameFile.originalname,
+      );
     } else if (updateData.frameUrl !== undefined) {
       dataToUpdate.frameUrl = updateData.frameUrl;
     }

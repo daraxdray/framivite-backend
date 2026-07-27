@@ -12,11 +12,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EventsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
+const cloudinary_service_1 = require("../common/cloudinary.service");
 const uuid_1 = require("uuid");
 let EventsService = class EventsService {
     prisma;
-    constructor(prisma) {
+    cloudinaryService;
+    constructor(prisma, cloudinaryService) {
         this.prisma = prisma;
+        this.cloudinaryService = cloudinaryService;
     }
     slugify(text) {
         return text
@@ -41,12 +44,14 @@ let EventsService = class EventsService {
     }
     async create(createEventDto, bannerFile, frameFile, organizerId) {
         const slug = await this.generateUniqueSlug(createEventDto.title);
-        const bannerUrl = bannerFile
-            ? `/uploads/banners/${bannerFile.filename}`
-            : createEventDto.bannerUrl || null;
-        const frameUrl = frameFile
-            ? `/uploads/frames/${frameFile.filename}`
-            : createEventDto.frameUrl || '/uploads/frames/default-frame.png';
+        let bannerUrl = createEventDto.bannerUrl || null;
+        if (bannerFile) {
+            bannerUrl = await this.cloudinaryService.uploadBuffer(bannerFile.buffer, 'framivite/banners', bannerFile.originalname);
+        }
+        let frameUrl = createEventDto.frameUrl || '/uploads/frames/default-frame.png';
+        if (frameFile) {
+            frameUrl = await this.cloudinaryService.uploadBuffer(frameFile.buffer, 'framivite/frames', frameFile.originalname);
+        }
         const defaultPosition = JSON.stringify({
             x: 100,
             y: 100,
@@ -121,13 +126,13 @@ let EventsService = class EventsService {
         if (updateData.framePosition !== undefined)
             dataToUpdate.framePosition = updateData.framePosition;
         if (bannerFile) {
-            dataToUpdate.bannerUrl = `/uploads/banners/${bannerFile.filename}`;
+            dataToUpdate.bannerUrl = await this.cloudinaryService.uploadBuffer(bannerFile.buffer, 'framivite/banners', bannerFile.originalname);
         }
         else if (updateData.bannerUrl !== undefined) {
             dataToUpdate.bannerUrl = updateData.bannerUrl;
         }
         if (frameFile) {
-            dataToUpdate.frameUrl = `/uploads/frames/${frameFile.filename}`;
+            dataToUpdate.frameUrl = await this.cloudinaryService.uploadBuffer(frameFile.buffer, 'framivite/frames', frameFile.originalname);
         }
         else if (updateData.frameUrl !== undefined) {
             dataToUpdate.frameUrl = updateData.frameUrl;
@@ -145,6 +150,7 @@ let EventsService = class EventsService {
 exports.EventsService = EventsService;
 exports.EventsService = EventsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        cloudinary_service_1.CloudinaryService])
 ], EventsService);
 //# sourceMappingURL=events.service.js.map

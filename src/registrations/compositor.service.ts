@@ -15,28 +15,37 @@ export interface FramePosition {
 export class CompositorService {
   async compositePhoto(
     framePathOrUrl: string,
-    userPhotoPath: string,
+    userPhotoBufferOrPath: Buffer | string,
     framePosition: FramePosition,
-    outputPath: string,
-  ): Promise<string> {
+  ): Promise<Buffer> {
     try {
-      const cleanFramePath = framePathOrUrl.replace(/^(\/)?uploads(\/)?/, '');
-      const frameFullPath = framePathOrUrl.startsWith(process.cwd())
-        ? framePathOrUrl
-        : path.join(process.cwd(), 'uploads', cleanFramePath);
+      let frameBuffer: Buffer;
 
-      if (!fs.existsSync(frameFullPath)) {
-        // Fallback: create a mock transparent frame PNG if frame missing
-        await this.createFallbackFrame(frameFullPath);
+      if (framePathOrUrl.startsWith('http://') || framePathOrUrl.startsWith('https://')) {
+        const res = await fetch(framePathOrUrl);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch frame PNG from URL: ${res.statusText}`);
+        }
+        frameBuffer = Buffer.from(await res.arrayBuffer());
+      } else {
+        const cleanFramePath = framePathOrUrl.replace(/^(\/)?uploads(\/)?/, '');
+        const frameFullPath = framePathOrUrl.startsWith(process.cwd())
+          ? framePathOrUrl
+          : path.join(process.cwd(), 'uploads', cleanFramePath);
+
+        if (!fs.existsSync(frameFullPath)) {
+          await this.createFallbackFrame(frameFullPath);
+        }
+        frameBuffer = await fs.promises.readFile(frameFullPath);
       }
 
       // 2. Read frame metadata to get full dimensions
-      const frameMetadata = await sharp(frameFullPath).metadata();
+      const frameMetadata = await sharp(frameBuffer).metadata();
       const frameWidth = frameMetadata.width || 1080;
       const frameHeight = frameMetadata.height || 1080;
 
       // 3. Process user photo: auto-orient EXIF & rotate if needed & resize to target (width, height)
-      let photoPipeline = sharp(userPhotoPath).rotate();
+      let photoPipeline = sharp(userPhotoBufferOrPath).rotate();
 
       if (framePosition.rotation && framePosition.rotation !== 0) {
         photoPipeline = photoPipeline.rotate(framePosition.rotation, {
@@ -66,10 +75,7 @@ export class CompositorService {
         .png()
         .toBuffer();
 
-      // 5. Read frame buffer
-      const frameBuffer = await sharp(frameFullPath).toBuffer();
-
-      // 6. Composite: photo placed at (x, y), frame PNG layered ON TOP at (0, 0)
+      // 5. Composite: photo placed at (x, y), frame PNG layered ON TOP at (0, 0)
       const posX = Math.round(framePosition.x);
       const posY = Math.round(framePosition.y);
 
@@ -89,11 +95,7 @@ export class CompositorService {
         .png({ quality: 90 })
         .toBuffer();
 
-      // 7. Write to output path
-      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      await fs.promises.writeFile(outputPath, finalImageBuffer);
-
-      return outputPath;
+      return finalImageBuffer;
     } catch (error) {
       console.error('Error compositing photo with sharp:', error);
       throw new InternalServerErrorException(
@@ -104,18 +106,9 @@ export class CompositorService {
 
   private async createFallbackFrame(targetPath: string) {
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    // Create simple PNG frame with transparent hole in middle
     const width = 1080;
     const height = 1080;
 
-    const svgOverlay = `
-      <svg width="${width}" height="${height}">
-        <rect width="${width}" height="${height}" fill="#1e1b4b" />
-        <rect x="240" y="240" width="600" height="600" fill="black" />
-      </svg>
-    `;
-
-    // Make dark border with transparent window in center (240, 240, 600, 600)
     const frameBuffer = await sharp({
       create: {
         width,

@@ -12,14 +12,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RegistrationsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
+const cloudinary_service_1 = require("../common/cloudinary.service");
 const compositor_service_1 = require("./compositor.service");
-const path_1 = require("path");
 let RegistrationsService = class RegistrationsService {
     prisma;
     compositorService;
-    constructor(prisma, compositorService) {
+    cloudinaryService;
+    constructor(prisma, compositorService, cloudinaryService) {
         this.prisma = prisma;
         this.compositorService = compositorService;
+        this.cloudinaryService = cloudinaryService;
     }
     async createRegistration(slug, createDto) {
         const event = await this.prisma.event.findUnique({
@@ -47,13 +49,13 @@ let RegistrationsService = class RegistrationsService {
         return registration;
     }
     async processPhotoUpload(id, photoFile) {
-        if (!photoFile) {
+        if (!photoFile || (!photoFile.buffer && !photoFile.path)) {
             throw new common_1.BadRequestException('No photo file provided');
         }
         const registration = await this.findOne(id);
         const event = registration.event;
-        const photoUrl = `/uploads/selfies/${photoFile.filename}`;
-        const userPhotoPath = photoFile.path;
+        const userPhotoBuffer = photoFile.buffer;
+        const photoUrl = await this.cloudinaryService.uploadBuffer(userPhotoBuffer, 'framivite/selfies', `selfie-${id}.png`);
         let framePosition = {
             x: 100,
             y: 100,
@@ -63,18 +65,17 @@ let RegistrationsService = class RegistrationsService {
         };
         if (event.framePosition) {
             try {
-                framePosition = typeof event.framePosition === 'string'
-                    ? JSON.parse(event.framePosition)
-                    : event.framePosition;
+                framePosition =
+                    typeof event.framePosition === 'string'
+                        ? JSON.parse(event.framePosition)
+                        : event.framePosition;
             }
             catch (err) {
                 console.warn('Failed to parse framePosition JSON:', err);
             }
         }
-        const composedFilename = `composed-${id}.png`;
-        const composedFullPath = (0, path_1.join)(process.cwd(), 'uploads', 'composed', composedFilename);
-        const composedImageUrl = `/uploads/composed/${composedFilename}`;
-        await this.compositorService.compositePhoto(event.frameUrl, userPhotoPath, framePosition, composedFullPath);
+        const composedBuffer = await this.compositorService.compositePhoto(event.frameUrl, userPhotoBuffer, framePosition);
+        const composedImageUrl = await this.cloudinaryService.uploadBuffer(composedBuffer, 'framivite/composed', `composed-${id}.png`);
         return this.prisma.registration.update({
             where: { id },
             data: {
@@ -93,6 +94,7 @@ exports.RegistrationsService = RegistrationsService;
 exports.RegistrationsService = RegistrationsService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        compositor_service_1.CompositorService])
+        compositor_service_1.CompositorService,
+        cloudinary_service_1.CloudinaryService])
 ], RegistrationsService);
 //# sourceMappingURL=registrations.service.js.map

@@ -1,8 +1,10 @@
 import { PrismaService } from '../prisma/prisma.service';
+import { CloudinaryService } from '../common/cloudinary.service';
 import { CreateEventDto } from './dto/create-event.dto';
 export declare class EventsService {
     private prisma;
-    constructor(prisma: PrismaService);
+    private cloudinaryService;
+    constructor(prisma: PrismaService, cloudinaryService: CloudinaryService);
     private slugify;
     generateUniqueSlug(title: string): Promise<string>;
     create(createEventDto: CreateEventDto, bannerFile?: Express.Multer.File, frameFile?: Express.Multer.File, organizerId?: string): Promise<{

@@ -48,19 +48,30 @@ const sharp_1 = __importDefault(require("sharp"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 let CompositorService = class CompositorService {
-    async compositePhoto(framePathOrUrl, userPhotoPath, framePosition, outputPath) {
+    async compositePhoto(framePathOrUrl, userPhotoBufferOrPath, framePosition) {
         try {
-            const cleanFramePath = framePathOrUrl.replace(/^(\/)?uploads(\/)?/, '');
-            const frameFullPath = framePathOrUrl.startsWith(process.cwd())
-                ? framePathOrUrl
-                : path.join(process.cwd(), 'uploads', cleanFramePath);
-            if (!fs.existsSync(frameFullPath)) {
-                await this.createFallbackFrame(frameFullPath);
+            let frameBuffer;
+            if (framePathOrUrl.startsWith('http://') || framePathOrUrl.startsWith('https://')) {
+                const res = await fetch(framePathOrUrl);
+                if (!res.ok) {
+                    throw new Error(`Failed to fetch frame PNG from URL: ${res.statusText}`);
+                }
+                frameBuffer = Buffer.from(await res.arrayBuffer());
             }
-            const frameMetadata = await (0, sharp_1.default)(frameFullPath).metadata();
+            else {
+                const cleanFramePath = framePathOrUrl.replace(/^(\/)?uploads(\/)?/, '');
+                const frameFullPath = framePathOrUrl.startsWith(process.cwd())
+                    ? framePathOrUrl
+                    : path.join(process.cwd(), 'uploads', cleanFramePath);
+                if (!fs.existsSync(frameFullPath)) {
+                    await this.createFallbackFrame(frameFullPath);
+                }
+                frameBuffer = await fs.promises.readFile(frameFullPath);
+            }
+            const frameMetadata = await (0, sharp_1.default)(frameBuffer).metadata();
             const frameWidth = frameMetadata.width || 1080;
             const frameHeight = frameMetadata.height || 1080;
-            let photoPipeline = (0, sharp_1.default)(userPhotoPath).rotate();
+            let photoPipeline = (0, sharp_1.default)(userPhotoBufferOrPath).rotate();
             if (framePosition.rotation && framePosition.rotation !== 0) {
                 photoPipeline = photoPipeline.rotate(framePosition.rotation, {
                     background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -84,7 +95,6 @@ let CompositorService = class CompositorService {
             })
                 .png()
                 .toBuffer();
-            const frameBuffer = await (0, sharp_1.default)(frameFullPath).toBuffer();
             const posX = Math.round(framePosition.x);
             const posY = Math.round(framePosition.y);
             const finalImageBuffer = await (0, sharp_1.default)(canvasBuffer)
@@ -102,9 +112,7 @@ let CompositorService = class CompositorService {
             ])
                 .png({ quality: 90 })
                 .toBuffer();
-            fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-            await fs.promises.writeFile(outputPath, finalImageBuffer);
-            return outputPath;
+            return finalImageBuffer;
         }
         catch (error) {
             console.error('Error compositing photo with sharp:', error);
@@ -115,12 +123,6 @@ let CompositorService = class CompositorService {
         fs.mkdirSync(path.dirname(targetPath), { recursive: true });
         const width = 1080;
         const height = 1080;
-        const svgOverlay = `
-      <svg width="${width}" height="${height}">
-        <rect width="${width}" height="${height}" fill="#1e1b4b" />
-        <rect x="240" y="240" width="600" height="600" fill="black" />
-      </svg>
-    `;
         const frameBuffer = await (0, sharp_1.default)({
             create: {
                 width,

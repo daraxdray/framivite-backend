@@ -12,28 +12,12 @@ import {
   Req,
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import { memoryStorage } from 'multer';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { v4 as uuidv4 } from 'uuid';
 
-const storage = diskStorage({
-  destination: (req, file, cb) => {
-    if (file.fieldname === 'banner') {
-      cb(null, join(process.cwd(), 'uploads', 'banners'));
-    } else if (file.fieldname === 'frame') {
-      cb(null, join(process.cwd(), 'uploads', 'frames'));
-    } else {
-      cb(null, join(process.cwd(), 'uploads'));
-    }
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${uuidv4()}${extname(file.originalname)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}`);
-  },
-});
+const storage = memoryStorage();
 
 @Controller('api/events')
 export class EventsController {

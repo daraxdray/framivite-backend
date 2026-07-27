@@ -15,6 +15,7 @@ const auth_module_1 = require("./auth/auth.module");
 const events_module_1 = require("./events/events.module");
 const registrations_module_1 = require("./registrations/registrations.module");
 const quotes_module_1 = require("./quotes/quotes.module");
+const cloudinary_module_1 = require("./common/cloudinary.module");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 let AppModule = class AppModule {
@@ -34,6 +35,7 @@ exports.AppModule = AppModule = __decorate([
             events_module_1.EventsModule,
             registrations_module_1.RegistrationsModule,
             quotes_module_1.QuotesModule,
+            cloudinary_module_1.CloudinaryModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

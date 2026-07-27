@@ -16,28 +16,10 @@ exports.EventsController = void 0;
 const common_1 = require("@nestjs/common");
 const platform_express_1 = require("@nestjs/platform-express");
 const multer_1 = require("multer");
-const path_1 = require("path");
 const events_service_1 = require("./events.service");
 const create_event_dto_1 = require("./dto/create-event.dto");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
-const uuid_1 = require("uuid");
-const storage = (0, multer_1.diskStorage)({
-    destination: (req, file, cb) => {
-        if (file.fieldname === 'banner') {
-            cb(null, (0, path_1.join)(process.cwd(), 'uploads', 'banners'));
-        }
-        else if (file.fieldname === 'frame') {
-            cb(null, (0, path_1.join)(process.cwd(), 'uploads', 'frames'));
-        }
-        else {
-            cb(null, (0, path_1.join)(process.cwd(), 'uploads'));
-        }
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = `${(0, uuid_1.v4)()}${(0, path_1.extname)(file.originalname)}`;
-        cb(null, `${file.fieldname}-${uniqueSuffix}`);
-    },
-});
+const storage = (0, multer_1.memoryStorage)();
 let EventsController = class EventsController {
     eventsService;
     constructor(eventsService) {

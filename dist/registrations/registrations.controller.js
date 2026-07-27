@@ -19,14 +19,6 @@ const multer_1 = require("multer");
 const path_1 = require("path");
 const registrations_service_1 = require("./registrations.service");
 const create_registration_dto_1 = require("./dto/create-registration.dto");
-const uuid_1 = require("uuid");
-const photoStorage = (0, multer_1.diskStorage)({
-    destination: (0, path_1.join)(process.cwd(), 'uploads', 'selfies'),
-    filename: (req, file, cb) => {
-        const uniqueSuffix = `${(0, uuid_1.v4)()}${(0, path_1.extname)(file.originalname)}`;
-        cb(null, `selfie-${uniqueSuffix}`);
-    },
-});
 let RegistrationsController = class RegistrationsController {
     registrationsService;
     constructor(registrationsService) {
@@ -45,6 +37,9 @@ let RegistrationsController = class RegistrationsController {
         const registration = await this.registrationsService.findOne(id);
         if (!registration.composedImageUrl) {
             throw new common_1.NotFoundException('Composed image not yet generated for this registration');
+        }
+        if (registration.composedImageUrl.startsWith('http://') || registration.composedImageUrl.startsWith('https://')) {
+            return res.redirect(registration.composedImageUrl);
         }
         const relativePath = registration.composedImageUrl.replace('/uploads/', '');
         const fileFullPath = (0, path_1.join)(process.cwd(), 'uploads', relativePath);
@@ -67,8 +62,8 @@ __decorate([
 __decorate([
     (0, common_1.Post)('registrations/:id/photo'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('photo', {
-        storage: photoStorage,
-        limits: { fileSize: 5 * 1024 * 1024 },
+        storage: (0, multer_1.memoryStorage)(),
+        limits: { fileSize: 10 * 1024 * 1024 },
         fileFilter: (req, file, cb) => {
             if (!file.mimetype.match(/^image\/(jpeg|png|webp|heic)$/i)) {
                 return cb(new common_1.BadRequestException('Only JPG, PNG, WEBP image files are allowed'), false);
