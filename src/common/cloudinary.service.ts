@@ -45,7 +45,10 @@ export class CloudinaryService {
     }
 
     return new Promise((resolve, reject) => {
-      const publicId = customFilename ? customFilename.replace(/\.[^/.]+$/, '') : undefined;
+      const uniqueId = `${uuidv4().substring(0, 8)}`;
+      const prefix = folder.split('/').pop() || 'media';
+      const publicId = `${prefix}-${uniqueId}`;
+
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder,
