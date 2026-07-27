@@ -44,7 +44,11 @@ export class RegistrationsService {
     return registration;
   }
 
-  async processPhotoUpload(id: string, photoFile: Express.Multer.File) {
+  async processPhotoUpload(
+    id: string,
+    photoFile: Express.Multer.File,
+    photoOptions?: { position?: string; fit?: 'cover' | 'contain' },
+  ) {
     if (!photoFile || (!photoFile.buffer && !photoFile.path)) {
       throw new BadRequestException('No photo file provided');
     }
@@ -86,6 +90,7 @@ export class RegistrationsService {
       event.frameUrl,
       userPhotoBuffer,
       framePosition,
+      photoOptions,
     );
 
     // 4. Upload composed PNG to Cloudinary (or local fallback)

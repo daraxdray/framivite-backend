@@ -11,12 +11,18 @@ export interface FramePosition {
   rotation?: number;
 }
 
+export interface PhotoAlignOptions {
+  fit?: 'cover' | 'contain';
+  position?: string; // 'top', 'center', 'bottom', 'left', 'right', etc.
+}
+
 @Injectable()
 export class CompositorService {
   async compositePhoto(
     framePathOrUrl: string,
     userPhotoBufferOrPath: Buffer | string,
     framePosition: FramePosition,
+    photoOptions?: PhotoAlignOptions,
   ): Promise<Buffer> {
     try {
       let frameBuffer: Buffer;
@@ -56,10 +62,14 @@ export class CompositorService {
       const targetW = Math.max(1, Math.round(framePosition.width));
       const targetH = Math.max(1, Math.round(framePosition.height));
 
+      const fitMode = photoOptions?.fit || 'cover';
+      const positionSetting = photoOptions?.position || 'top';
+
       const resizedPhotoBuffer = await photoPipeline
         .resize(targetW, targetH, {
-          fit: 'cover',
-          position: 'center',
+          fit: fitMode,
+          position: positionSetting,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
         })
         .toBuffer();
 
