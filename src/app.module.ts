@@ -7,6 +7,7 @@ import { EventsModule } from './events/events.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { QuotesModule } from './quotes/quotes.module';
 import { CloudinaryModule } from './common/cloudinary.module';
+import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -24,6 +25,7 @@ import { AppService } from './app.service';
     RegistrationsModule,
     QuotesModule,
     CloudinaryModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

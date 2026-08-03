@@ -22,6 +22,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Organizer account not found');
     }
 
-    return { id: organizer.id, name: organizer.name, email: organizer.email };
+    return { id: organizer.id, name: organizer.name, email: organizer.email, role: organizer.role };
   }
 }

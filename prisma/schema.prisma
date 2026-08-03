@@ -12,6 +12,7 @@ model Organizer {
   name      String
   email     String   @unique
   password  String
+  role      String   @default("ORGANIZER")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   events    Event[]

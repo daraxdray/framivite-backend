@@ -63,7 +63,7 @@ export class CompositorService {
       const targetH = Math.max(1, Math.round(framePosition.height));
 
       const fitMode = photoOptions?.fit || 'cover';
-      const positionSetting = photoOptions?.position || 'top';
+      const positionSetting = photoOptions?.position || 'center';
 
       const resizedPhotoBuffer = await photoPipeline
         .resize(targetW, targetH, {

@@ -35,7 +35,7 @@ export class AuthService {
       },
     });
 
-    const token = this.generateToken(organizer.id, organizer.email);
+    const token = this.generateToken(organizer.id, organizer.email, organizer.role);
 
     return {
       token,
@@ -43,6 +43,7 @@ export class AuthService {
         id: organizer.id,
         name: organizer.name,
         email: organizer.email,
+        role: organizer.role,
       },
     };
   }
@@ -61,7 +62,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const token = this.generateToken(organizer.id, organizer.email);
+    const token = this.generateToken(organizer.id, organizer.email, organizer.role);
 
     return {
       token,
@@ -69,11 +70,12 @@ export class AuthService {
         id: organizer.id,
         name: organizer.name,
         email: organizer.email,
+        role: organizer.role,
       },
     };
   }
 
-  private generateToken(sub: string, email: string): string {
-    return this.jwtService.sign({ sub, email });
+  private generateToken(sub: string, email: string, role: string): string {
+    return this.jwtService.sign({ sub, email, role });
   }
 }

@@ -69,13 +69,28 @@ export class RegistrationsController {
       throw new NotFoundException('Composed image not yet generated for this registration');
     }
 
+    const filename = `framed-${registration.name.replace(/\s+/g, '-').toLowerCase()}-${id.substring(0, 6)}.png`;
+
     if (registration.composedImageUrl.startsWith('http://') || registration.composedImageUrl.startsWith('https://')) {
-      return res.redirect(registration.composedImageUrl);
+      try {
+        const remoteRes = await fetch(registration.composedImageUrl);
+        if (!remoteRes.ok) {
+          return res.redirect(registration.composedImageUrl);
+        }
+        const arrayBuffer = await remoteRes.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(buffer);
+      } catch (err) {
+        console.error('Error fetching remote image for download:', err);
+        return res.redirect(registration.composedImageUrl);
+      }
     }
 
     const relativePath = registration.composedImageUrl.replace('/uploads/', '');
     const fileFullPath = join(process.cwd(), 'uploads', relativePath);
-    const filename = `framed-${registration.name.replace(/\s+/g, '-').toLowerCase()}-${id.substring(0, 6)}.png`;
 
     return res.download(fileFullPath, filename);
   }
