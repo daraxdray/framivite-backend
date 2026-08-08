@@ -48,12 +48,13 @@ export class RegistrationsController {
   )
   async uploadPhoto(
     @Param('id') id: string,
-    @Body() body: { photoPosition?: string; fitMode?: 'cover' | 'contain' },
+    @Body() body: { photoPosition?: string; fitMode?: 'cover' | 'contain'; frameId?: string },
     @UploadedFile() file: Express.Multer.File,
   ) {
     return this.registrationsService.processPhotoUpload(id, file, {
       position: body?.photoPosition,
       fit: body?.fitMode,
+      frameId: body?.frameId,
     });
   }
 

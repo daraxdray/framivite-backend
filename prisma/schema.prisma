@@ -26,22 +26,37 @@ model Event {
   date          DateTime?
   location      String?
   bannerUrl     String?
-  frameUrl      String
-  framePosition String         // JSON string: { x, y, width, height, rotation }
+  frameUrl      String?
+  framePosition String?        // Legacy fallback JSON string: { x, y, width, height, rotation }
   organizerId   String?
   organizer     Organizer?     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  frames        EventFrame[]
+  registrations Registration[]
+}
+
+model EventFrame {
+  id            String         @id @default(uuid())
+  eventId       String
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name          String?        @default("Frame 1")
+  frameUrl      String
+  framePosition String         // JSON string: { x, y, width, height, rotation }
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   registrations Registration[]
 }
 
 model Registration {
-  id               String   @id @default(uuid())
+  id               String      @id @default(uuid())
   eventId          String
-  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event            Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  frameId          String?
+  frame            EventFrame? @relation(fields: [frameId], references: [id], onDelete: SetNull)
   name             String
   email            String
   photoUrl         String?
   composedImageUrl String?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime    @default(now())
 }

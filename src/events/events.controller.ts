@@ -54,6 +54,7 @@ export class EventsController {
       [
         { name: 'banner', maxCount: 1 },
         { name: 'frame', maxCount: 1 },
+        { name: 'frames', maxCount: 10 },
       ],
       {
         storage,
@@ -65,13 +66,14 @@ export class EventsController {
     @Req() req: any,
     @Body() createEventDto: CreateEventDto,
     @UploadedFiles()
-    files: { banner?: Express.Multer.File[]; frame?: Express.Multer.File[] },
+    files: { banner?: Express.Multer.File[]; frame?: Express.Multer.File[]; frames?: Express.Multer.File[] },
   ) {
     const bannerFile = files?.banner?.[0];
     const frameFile = files?.frame?.[0];
+    const frameFiles = files?.frames || (frameFile ? [frameFile] : []);
     const organizerId = req.user?.id;
 
-    return this.eventsService.create(createEventDto, bannerFile, frameFile, organizerId);
+    return this.eventsService.create(createEventDto, bannerFile, frameFiles, organizerId);
   }
 
   @Get()
@@ -102,6 +104,7 @@ export class EventsController {
       [
         { name: 'banner', maxCount: 1 },
         { name: 'frame', maxCount: 1 },
+        { name: 'frames', maxCount: 10 },
       ],
       { storage },
     ),
@@ -110,11 +113,12 @@ export class EventsController {
     @Param('id') id: string,
     @Body() updateEventDto: Partial<CreateEventDto>,
     @UploadedFiles()
-    files: { banner?: Express.Multer.File[]; frame?: Express.Multer.File[] },
+    files: { banner?: Express.Multer.File[]; frame?: Express.Multer.File[]; frames?: Express.Multer.File[] },
   ) {
     const bannerFile = files?.banner?.[0];
     const frameFile = files?.frame?.[0];
-    return this.eventsService.update(id, updateEventDto, bannerFile, frameFile);
+    const frameFiles = files?.frames || (frameFile ? [frameFile] : []);
+    return this.eventsService.update(id, updateEventDto, bannerFile, frameFiles);
   }
 
   @UseGuards(JwtAuthGuard)
