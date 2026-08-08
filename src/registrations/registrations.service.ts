@@ -36,7 +36,14 @@ export class RegistrationsService {
   async findOne(id: string) {
     const registration = await this.prisma.registration.findUnique({
       where: { id },
-      include: { event: true },
+      include: {
+        event: {
+          include: {
+            frames: { orderBy: { createdAt: 'asc' } },
+          },
+        },
+        frame: true,
+      },
     });
     if (!registration) {
       throw new NotFoundException(`Registration with ID "${id}" not found`);
@@ -47,7 +54,7 @@ export class RegistrationsService {
   async processPhotoUpload(
     id: string,
     photoFile: Express.Multer.File,
-    photoOptions?: { position?: string; fit?: 'cover' | 'contain' },
+    photoOptions?: { position?: string; fit?: 'cover' | 'contain'; frameId?: string },
   ) {
     if (!photoFile || (!photoFile.buffer && !photoFile.path)) {
       throw new BadRequestException('No photo file provided');
@@ -55,6 +62,29 @@ export class RegistrationsService {
 
     const registration = await this.findOne(id);
     const event = registration.event;
+
+    // Resolve target frame for compositing
+    let selectedFrame: { id?: string; frameUrl: string; framePosition: string } | null = null;
+
+    if (photoOptions?.frameId) {
+      const foundFrame = await this.prisma.eventFrame.findUnique({
+        where: { id: photoOptions.frameId },
+      });
+      if (foundFrame) {
+        selectedFrame = foundFrame;
+      }
+    }
+
+    if (!selectedFrame && event.frames && event.frames.length > 0) {
+      selectedFrame = event.frames[0];
+    }
+
+    if (!selectedFrame) {
+      selectedFrame = {
+        frameUrl: event.frameUrl || '/uploads/frames/default-frame.png',
+        framePosition: event.framePosition || JSON.stringify({ x: 100, y: 100, width: 400, height: 400, rotation: 0 }),
+      };
+    }
 
     const userPhotoBuffer = photoFile.buffer;
 
@@ -74,12 +104,12 @@ export class RegistrationsService {
       rotation: 0,
     };
 
-    if (event.framePosition) {
+    if (selectedFrame.framePosition) {
       try {
         framePosition =
-          typeof event.framePosition === 'string'
-            ? JSON.parse(event.framePosition)
-            : event.framePosition;
+          typeof selectedFrame.framePosition === 'string'
+            ? JSON.parse(selectedFrame.framePosition)
+            : selectedFrame.framePosition;
       } catch (err) {
         console.warn('Failed to parse framePosition JSON:', err);
       }
@@ -87,7 +117,7 @@ export class RegistrationsService {
 
     // 3. Trigger Compositing Pipeline (returns Buffer of composed PNG)
     const composedBuffer = await this.compositorService.compositePhoto(
-      event.frameUrl,
+      selectedFrame.frameUrl,
       userPhotoBuffer,
       framePosition,
       photoOptions,
@@ -106,8 +136,14 @@ export class RegistrationsService {
       data: {
         photoUrl,
         composedImageUrl,
+        frameId: selectedFrame.id && !selectedFrame.id.startsWith('legacy-') ? selectedFrame.id : null,
       },
-      include: { event: true },
+      include: {
+        event: {
+          include: { frames: { orderBy: { createdAt: 'asc' } } },
+        },
+        frame: true,
+      },
     });
   }
 

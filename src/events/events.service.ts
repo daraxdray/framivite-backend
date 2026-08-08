@@ -40,10 +40,39 @@ export class EventsService {
     return isNaN(d.getTime()) ? null : d;
   }
 
+  private defaultPosition = JSON.stringify({
+    x: 100,
+    y: 100,
+    width: 400,
+    height: 400,
+    rotation: 0,
+  });
+
+  private formatEvent<T extends { id: string; frameUrl?: string | null; framePosition?: string | null; frames?: any[] }>(event: T): T {
+    if (!event) return event;
+    const frames = event.frames && event.frames.length > 0
+      ? event.frames
+      : [
+          {
+            id: `legacy-${event.id}`,
+            eventId: event.id,
+            name: 'Frame 1',
+            frameUrl: event.frameUrl || '/uploads/frames/default-frame.png',
+            framePosition: event.framePosition || this.defaultPosition,
+          },
+        ];
+    return {
+      ...event,
+      frameUrl: event.frameUrl || frames[0].frameUrl,
+      framePosition: event.framePosition || frames[0].framePosition,
+      frames,
+    };
+  }
+
   async create(
     createEventDto: CreateEventDto,
     bannerFile?: Express.Multer.File,
-    frameFile?: Express.Multer.File,
+    frameFiles: Express.Multer.File[] = [],
     organizerId?: string,
   ) {
     const slug = await this.generateUniqueSlug(createEventDto.title);
@@ -61,92 +90,133 @@ export class EventsService {
       }
     }
 
-    let frameUrl = createEventDto.frameUrl || '/uploads/frames/default-frame.png';
-    if (frameFile && frameFile.buffer && frameFile.buffer.length > 0) {
+    let rawFrames: Array<{ id?: string; name?: string; framePosition?: string; frameUrl?: string; fileIndex?: number }> = [];
+    if (createEventDto.framesData) {
       try {
-        frameUrl = await this.cloudinaryService.uploadBuffer(
-          frameFile.buffer,
-          'framivite/frames',
-          frameFile.originalname,
-        );
-      } catch (err) {
-        console.error('Failed to upload frame:', err);
+        rawFrames = JSON.parse(createEventDto.framesData);
+      } catch (e) {
+        console.warn('Failed to parse framesData JSON:', e);
       }
     }
 
-    const defaultPosition = JSON.stringify({
-      x: 100,
-      y: 100,
-      width: 400,
-      height: 400,
-      rotation: 0,
-    });
+    if (rawFrames.length === 0) {
+      rawFrames = [
+        {
+          name: 'Frame 1',
+          framePosition: createEventDto.framePosition || this.defaultPosition,
+          frameUrl: createEventDto.frameUrl,
+          fileIndex: 0,
+        },
+      ];
+    }
 
-    const framePosition = createEventDto.framePosition || defaultPosition;
+    const processedFrames: Array<{ name: string; frameUrl: string; framePosition: string }> = [];
 
-    return this.prisma.event.create({
+    for (let i = 0; i < rawFrames.length; i++) {
+      const item = rawFrames[i];
+      const file = item.fileIndex !== undefined ? frameFiles[item.fileIndex] : frameFiles[i];
+
+      let frameUrl = item.frameUrl || createEventDto.frameUrl || '/uploads/frames/default-frame.png';
+      if (file && file.buffer && file.buffer.length > 0) {
+        try {
+          frameUrl = await this.cloudinaryService.uploadBuffer(
+            file.buffer,
+            'framivite/frames',
+            file.originalname,
+          );
+        } catch (err) {
+          console.error(`Failed to upload frame file index ${item.fileIndex}:`, err);
+        }
+      }
+
+      processedFrames.push({
+        name: item.name && item.name.trim() ? item.name : `Frame ${i + 1}`,
+        frameUrl,
+        framePosition: item.framePosition || createEventDto.framePosition || this.defaultPosition,
+      });
+    }
+
+    const primaryFrame = processedFrames[0] || {
+      frameUrl: '/uploads/frames/default-frame.png',
+      framePosition: this.defaultPosition,
+    };
+
+    const createdEvent = await this.prisma.event.create({
       data: {
         title: createEventDto.title,
         description: createEventDto.description || '',
         date: this.parseDateSafely(createEventDto.date),
         location: createEventDto.location || '',
         bannerUrl,
-        frameUrl,
-        framePosition,
+        frameUrl: primaryFrame.frameUrl,
+        framePosition: primaryFrame.framePosition,
         slug,
         organizerId: organizerId || createEventDto.organizerId || null,
+        frames: {
+          create: processedFrames,
+        },
+      },
+      include: {
+        frames: { orderBy: { createdAt: 'asc' } },
       },
     });
+
+    return this.formatEvent(createdEvent);
   }
 
   async findAll(organizerId?: string) {
     const whereCondition = organizerId ? { organizerId } : {};
-    return this.prisma.event.findMany({
+    const events = await this.prisma.event.findMany({
       where: whereCondition,
       orderBy: { createdAt: 'desc' },
       include: {
+        frames: { orderBy: { createdAt: 'asc' } },
         _count: {
           select: { registrations: true },
         },
       },
     });
+    return events.map((e) => this.formatEvent(e));
   }
 
   async findBySlug(slug: string) {
     const event = await this.prisma.event.findUnique({
       where: { slug },
       include: {
+        frames: { orderBy: { createdAt: 'asc' } },
         _count: { select: { registrations: true } },
       },
     });
     if (!event) {
       throw new NotFoundException(`Event with slug "${slug}" not found`);
     }
-    return event;
+    return this.formatEvent(event);
   }
 
   async findOne(id: string) {
     const event = await this.prisma.event.findUnique({
       where: { id },
       include: {
+        frames: { orderBy: { createdAt: 'asc' } },
         registrations: {
           orderBy: { createdAt: 'desc' },
+          include: { frame: true },
         },
       },
     });
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
-    return event;
+    return this.formatEvent(event);
   }
 
   async update(
     id: string,
     updateData: Partial<CreateEventDto>,
     bannerFile?: Express.Multer.File,
-    frameFile?: Express.Multer.File,
+    frameFiles: Express.Multer.File[] = [],
   ) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
 
     const dataToUpdate: any = {};
     if (updateData.title !== undefined && updateData.title.trim() !== '') {
@@ -160,9 +230,6 @@ export class EventsService {
     }
     if (updateData.location !== undefined) {
       dataToUpdate.location = updateData.location || '';
-    }
-    if (updateData.framePosition !== undefined && updateData.framePosition.trim() !== '') {
-      dataToUpdate.framePosition = updateData.framePosition;
     }
 
     if (bannerFile && bannerFile.buffer && bannerFile.buffer.length > 0) {
@@ -179,24 +246,125 @@ export class EventsService {
       dataToUpdate.bannerUrl = updateData.bannerUrl;
     }
 
-    if (frameFile && frameFile.buffer && frameFile.buffer.length > 0) {
+    if (updateData.framesData) {
+      let rawFrames: Array<{ id?: string; name?: string; framePosition?: string; frameUrl?: string; fileIndex?: number }> = [];
       try {
-        dataToUpdate.frameUrl = await this.cloudinaryService.uploadBuffer(
-          frameFile.buffer,
-          'framivite/frames',
-          frameFile.originalname,
-        );
-      } catch (err) {
-        console.error('Failed to update frame:', err);
+        rawFrames = JSON.parse(updateData.framesData);
+      } catch (e) {
+        console.warn('Failed to parse update framesData JSON:', e);
       }
-    } else if (updateData.frameUrl !== undefined) {
-      dataToUpdate.frameUrl = updateData.frameUrl;
+
+      if (rawFrames.length > 0) {
+        const keptFrameIds = rawFrames
+          .map((f) => f.id)
+          .filter((id) => id && !id.startsWith('legacy-')) as string[];
+
+        // Delete frames removed by user
+        await this.prisma.eventFrame.deleteMany({
+          where: {
+            eventId: id,
+            id: { notIn: keptFrameIds },
+          },
+        });
+
+        const updatedFramesList: Array<{ id?: string; name: string; frameUrl: string; framePosition: string }> = [];
+
+        for (let i = 0; i < rawFrames.length; i++) {
+          const item = rawFrames[i];
+          const file = item.fileIndex !== undefined ? frameFiles[item.fileIndex] : undefined;
+
+          let frameUrl = item.frameUrl || existing.frameUrl || '/uploads/frames/default-frame.png';
+          if (file && file.buffer && file.buffer.length > 0) {
+            try {
+              frameUrl = await this.cloudinaryService.uploadBuffer(
+                file.buffer,
+                'framivite/frames',
+                file.originalname,
+              );
+            } catch (err) {
+              console.error(`Failed to upload frame file index ${item.fileIndex}:`, err);
+            }
+          }
+
+          const frameName = item.name && item.name.trim() ? item.name : `Frame ${i + 1}`;
+          const framePosition = item.framePosition || existing.framePosition || this.defaultPosition;
+
+          if (item.id && !item.id.startsWith('legacy-')) {
+            await this.prisma.eventFrame.update({
+              where: { id: item.id },
+              data: {
+                name: frameName,
+                frameUrl,
+                framePosition,
+              },
+            });
+            updatedFramesList.push({ id: item.id, name: frameName, frameUrl, framePosition });
+          } else {
+            const created = await this.prisma.eventFrame.create({
+              data: {
+                eventId: id,
+                name: frameName,
+                frameUrl,
+                framePosition,
+              },
+            });
+            updatedFramesList.push({ id: created.id, name: created.name || frameName, frameUrl: created.frameUrl, framePosition: created.framePosition });
+          }
+        }
+
+        if (updatedFramesList.length > 0) {
+          dataToUpdate.frameUrl = updatedFramesList[0].frameUrl;
+          dataToUpdate.framePosition = updatedFramesList[0].framePosition;
+        }
+      }
+    } else if (frameFiles.length > 0 || updateData.frameUrl || updateData.framePosition) {
+      // Fallback for single frame legacy updates
+      let frameUrl = existing.frameUrl || '/uploads/frames/default-frame.png';
+      const file = frameFiles[0];
+      if (file && file.buffer && file.buffer.length > 0) {
+        try {
+          frameUrl = await this.cloudinaryService.uploadBuffer(
+            file.buffer,
+            'framivite/frames',
+            file.originalname,
+          );
+        } catch (err) {
+          console.error('Failed to update frame:', err);
+        }
+      } else if (updateData.frameUrl !== undefined) {
+        frameUrl = updateData.frameUrl;
+      }
+
+      dataToUpdate.frameUrl = frameUrl;
+      if (updateData.framePosition) {
+        dataToUpdate.framePosition = updateData.framePosition;
+      }
+
+      const existingFrames = await this.prisma.eventFrame.findMany({ where: { eventId: id } });
+      if (existingFrames.length > 0) {
+        await this.prisma.eventFrame.update({
+          where: { id: existingFrames[0].id },
+          data: {
+            frameUrl,
+            framePosition: dataToUpdate.framePosition || existingFrames[0].framePosition,
+          },
+        });
+      }
     }
 
-    return this.prisma.event.update({
+    const updatedEvent = await this.prisma.event.update({
       where: { id },
       data: dataToUpdate,
+      include: {
+        frames: { orderBy: { createdAt: 'asc' } },
+        registrations: {
+          orderBy: { createdAt: 'desc' },
+          include: { frame: true },
+        },
+      },
     });
+
+    return this.formatEvent(updatedEvent);
   }
 
   async remove(id: string) {

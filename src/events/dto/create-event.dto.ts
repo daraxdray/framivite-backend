@@ -31,5 +31,9 @@ export class CreateEventDto {
 
   @IsString()
   @IsOptional()
+  framesData?: string; // JSON string representing array of frame objects
+
+  @IsString()
+  @IsOptional()
   organizerId?: string;
 }
